@@ -1,4 +1,5 @@
 %global pecl_name imagick
+%global with_zts 0%{?__ztsphp:1}
 %global ini_name 40-%{pecl_name}.ini
 %global php php71u
 
@@ -45,6 +46,7 @@ Conflicts: php-pecl-%{pecl_name} < %{version}
 Conflicts: php-pecl-gmagick
 
 %{?filter_provides_in: %filter_provides_in %{php_extdir}/.*\.so$}
+%{?filter_provides_in: %filter_provides_in %{php_ztsextdir}/.*\.so$}
 %{?filter_setup}
 
 
@@ -62,6 +64,10 @@ mv %{pecl_name}-%{version} NTS
 
 sed -e '/LICENSE/s/role="doc"/role="src"/' -i package.xml
 
+%if %{with_zts}
+cp -pr NTS ZTS
+%endif
+
 
 %build
 pushd NTS
@@ -70,18 +76,33 @@ phpize
 make %{?_smp_mflags}
 popd
 
+%if %{with_zts}
+pushd ZTS
+zts-phpize
+%configure --with-%{pecl_name} --with-php-config=%{_bindir}/zts-php-config
+make %{?_smp_mflags}
+popd
+%endif
+
 
 %install
 install -D -p -m 644 package.xml %{buildroot}%{pecl_xmldir}/%{pecl_name}.xml
 
 make install -C NTS INSTALL_ROOT=%{buildroot}
 install -D -p -m 644 %{SOURCE1} %{buildroot}%{php_inidir}/%{ini_name}
+%if %{with_zts}
+make install -C ZTS INSTALL_ROOT=%{buildroot}
+install -Dpm 0644 %{SOURCE1} %{buildroot}%{php_ztsinidir}/%{ini_name}
+%endif
 
 for i in $(grep 'role="doc"' package.xml | sed -e 's/^.*name="//;s/".*$//')
 do install -D -p -m 644 NTS/$i %{buildroot}%{pecl_docdir}/%{pecl_name}/$i
 done
 
 rm -rf %{buildroot}%{php_incldir}/ext/%{pecl_name}/
+%if %{with_zts}
+rm -rf %{buildroot}%{php_ztsincldir}/ext/%{pecl_name}/
+%endif
 
 
 %check
@@ -90,6 +111,12 @@ rm -rf %{buildroot}%{php_incldir}/ext/%{pecl_name}/
     --no-php-ini \
     --define extension=%{buildroot}%{php_extdir}/%{pecl_name}.so \
     --modules | grep %{pecl_name}
+%if %{with_zts}
+%{__ztsphp} \
+    --no-php-ini \
+    --define extension=%{buildroot}%{php_ztsextdir}/%{pecl_name}.so \
+    --modules | grep %{pecl_name}
+%endif
 
 
 %post
@@ -108,11 +135,16 @@ fi
 %{pecl_xmldir}/%{pecl_name}.xml
 %{php_extdir}/%{pecl_name}.so
 %config(noreplace) %verify(not md5 mtime size) %{php_inidir}/%{ini_name}
+%if %{with_zts}
+%{php_ztsextdir}/%{pecl_name}.so
+%config(noreplace) %verify(not md5 mtime size) %{php_ztsinidir}/%{ini_name}
+%endif
 
 
 %changelog
 * Thu Feb 02 2017 Carl George <carl.george@rackspace.com> - 3.4.3-1.ius
 - Port from Fedora to IUS, with 3.4.3 stable
+- Enabled ZTS support
 
 * Mon Nov 14 2016 Remi Collet <remi@fedoraproject.org> - 3.4.3-0.2.RC1
 - rebuild for https://fedoraproject.org/wiki/Changes/php71

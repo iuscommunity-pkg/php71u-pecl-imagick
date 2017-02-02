@@ -1,110 +1,119 @@
-%global	php_apiver  %((echo 0; php -i 2>/dev/null | sed -n 's/^PHP API => //p') | tail -1)
-%{!?__pecl:		%{expand:	%%global __pecl	%{_bindir}/pecl}}
-%{!?php_extdir:	%{expand:	%%global php_extdir	%(php-config --extension-dir)}}
+%global pecl_name imagick
+%global ini_name 40-%{pecl_name}.ini
+%global php php71u
 
-%global peclName  imagick
-%if "%{php_version}" < "5.6"
-%global ini_name  %{peclName}.ini
-%else
-%global ini_name  40-%{peclName}.ini
-%endif
-%global prever    RC1
+Summary: Provides a wrapper to the ImageMagick library
+Name: %{php}-pecl-%{pecl_name}
+Version: 3.4.3
+Release: 1.ius%{?dist}
+License: PHP
+Group: Development/Libraries
+Source0: http://pecl.php.net/get/%{pecl_name}-%{version}.tgz
+Source1: %{pecl_name}.ini
+URL: http://pecl.php.net/package/%{pecl_name}
 
-Summary:		Provides a wrapper to the ImageMagick library
-Name:		php-pecl-%peclName
-Version:		3.4.3
-Release:		0.2.%{prever}%{?dist}
-License:		PHP
-Group:		Development/Libraries
-Source0:		http://pecl.php.net/get/%peclName-%{version}%{?prever}.tgz
-Source1:		%peclName.ini
-BuildRoot:	%{_tmppath}/%{name}-%{version}-root-%(%{__id_u} -n)
-URL:			http://pecl.php.net/package/%peclName
-BuildRequires:	php-pear >= 1.4.7
-BuildRequires: php-devel >= 5.1.3, ImageMagick-devel >= 6.2.4
-%if 0%{?fedora} < 24
-Requires(post):	%{__pecl}
-Requires(postun):	%{__pecl}
-%endif
-%if 0%{?php_zend_api:1}
-Requires:		php(zend-abi) = %{php_zend_api}
-Requires:		php(api) = %{php_core_api}
-%else
-Requires:		php-api = %{php_apiver}
-%endif
-Provides:		php-pecl(%peclName) = %{version}
+BuildRequires: pecl >= 1.10.0
+BuildRequires: %{php}-devel
+# https://github.com/mkoppanen/imagick/blob/3.4.3/ChangeLog#L127
+BuildRequires: ImageMagick-devel >= 6.5.3.10
 
-Conflicts:	php-pecl-gmagick
+Requires(post): pecl >= 1.10.0
+Requires(postun): pecl >= 1.10.0
+
+Requires: php(zend-abi) = %{php_zend_api}
+Requires: php(api) = %{php_core_api}
+
+# provide the stock name
+Provides: php-pecl-%{pecl_name} = %{version}
+Provides: php-pecl-%{pecl_name}%{?_isa} = %{version}
+
+# provide the stock and IUS names without pecl
+Provides: php-%{pecl_name} = %{version}
+Provides: php-%{pecl_name}%{?_isa} = %{version}
+Provides: %{php}-%{pecl_name} = %{version}
+Provides: %{php}-%{pecl_name}%{?_isa} = %{version}
+
+# provide the stock and IUS names in pecl() format
+Provides: php-pecl(%{pecl_name}) = %{version}
+Provides: php-pecl(%{pecl_name})%{?_isa} = %{version}
+Provides: %{php}-pecl(%{pecl_name}) = %{version}
+Provides: %{php}-pecl(%{pecl_name})%{?_isa} = %{version}
+
+# conflict with the stock name
+Conflicts: php-pecl-%{pecl_name} < %{version}
+
+Conflicts: php-pecl-gmagick
+
+%{?filter_provides_in: %filter_provides_in %{php_extdir}/.*\.so$}
+%{?filter_setup}
 
 
 %description
-%peclName is a native php extension to create and modify images using the
+%{pecl_name} is a native php extension to create and modify images using the
 ImageMagick API.
 This extension requires ImageMagick version 6.2.4+ and PHP 5.1.3+.
 
 IMPORTANT: Version 2.x API is not compatible with earlier versions.
 
+
 %prep
 %setup -qc
+mv %{pecl_name}-%{version} NTS
 
-cd %peclName-%{version}%{?prever}
+sed -e '/LICENSE/s/role="doc"/role="src"/' -i package.xml
 
 
 %build
-cd %peclName-%{version}%{?prever}
+pushd NTS
 phpize
-%{configure} --with-%peclName
-%{__make}
+%configure --with-%{pecl_name} --with-php-config=%{_bindir}/php-config
+make %{?_smp_mflags}
+popd
+
 
 %install
-rm -rf %{buildroot}
+install -D -p -m 644 package.xml %{buildroot}%{pecl_xmldir}/%{pecl_name}.xml
 
-cd %peclName-%{version}%{?prever}
+make install -C NTS INSTALL_ROOT=%{buildroot}
+install -D -p -m 644 %{SOURCE1} %{buildroot}%{php_inidir}/%{ini_name}
 
-%{__make} install \
-	INSTALL_ROOT=%{buildroot}
+for i in $(grep 'role="doc"' package.xml | sed -e 's/^.*name="//;s/".*$//')
+do install -D -p -m 644 NTS/$i %{buildroot}%{pecl_docdir}/%{pecl_name}/$i
+done
 
-# Install XML package description
-install -m 0755 -d %{buildroot}%{pecl_xmldir}
-install -m 0664 ../package.xml %{buildroot}%{pecl_xmldir}/%peclName.xml
-install -d %{buildroot}%{_sysconfdir}/php.d/
-install -m 0664 %{SOURCE1} %{buildroot}%{_sysconfdir}/php.d/%{ini_name}
+rm -rf %{buildroot}%{php_incldir}/ext/%{pecl_name}/
 
-rm -rf %{buildroot}/%{_includedir}/php/ext/%peclName/
 
 %check
 # simple module load test
-pushd %peclName-%{version}%{?prever}
-php --no-php-ini \
-    --define extension_dir=%{buildroot}%{php_extdir} \
-    --define extension=%peclName.so \
-    --modules | grep %peclName
+%{__php} \
+    --no-php-ini \
+    --define extension=%{buildroot}%{php_extdir}/%{pecl_name}.so \
+    --modules | grep %{pecl_name}
 
-%clean
-rm -rf %{buildroot}
 
-%if 0%{?fedora} < 24
 %post
-%if 0%{?pecl_install:1}
-%{pecl_install} %{pecl_xmldir}/%peclName.xml
-%endif
+%{pecl_install} %{pecl_xmldir}/%{pecl_name}.xml >/dev/null || :
+
 
 %postun
-%if 0%{?pecl_uninstall:1}
-if [ "$1" -eq "0" ]; then
-	%{pecl_uninstall} %peclName
+if [ $1 -eq 0 ]; then
+    %{pecl_uninstall} %{pecl_name} >/dev/null || :
 fi
-%endif
-%endif
+
 
 %files
-%defattr(-,root,root,-)
-%doc %peclName-%{version}%{?prever}/examples %peclName-%{version}%{?prever}/CREDITS
-%{php_extdir}/%peclName.so
-%{pecl_xmldir}/%peclName.xml
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/php.d/%{ini_name}
+%license NTS/LICENSE
+%doc %{pecl_docdir}/%{pecl_name}
+%{pecl_xmldir}/%{pecl_name}.xml
+%{php_extdir}/%{pecl_name}.so
+%config(noreplace) %verify(not md5 mtime size) %{php_inidir}/%{ini_name}
+
 
 %changelog
+* Thu Feb 02 2017 Carl George <carl.george@rackspace.com> - 3.4.3-1.ius
+- Port from Fedora to IUS, with 3.4.3 stable
+
 * Mon Nov 14 2016 Remi Collet <remi@fedoraproject.org> - 3.4.3-0.2.RC1
 - rebuild for https://fedoraproject.org/wiki/Changes/php71
 

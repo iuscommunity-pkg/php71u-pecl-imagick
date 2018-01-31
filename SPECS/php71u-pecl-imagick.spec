@@ -1,7 +1,8 @@
 %global pecl_name imagick
-%global with_zts 0%{?__ztsphp:1}
 %global ini_name 40-%{pecl_name}.ini
 %global php php71u
+
+%bcond_without zts
 
 Summary: Provides a wrapper to the ImageMagick library
 Name: %{php}-pecl-%{pecl_name}
@@ -9,9 +10,9 @@ Version: 3.4.3
 Release: 1.ius%{?dist}
 License: PHP
 Group: Development/Libraries
-Source0: http://pecl.php.net/get/%{pecl_name}-%{version}.tgz
+Source0: https://pecl.php.net/get/%{pecl_name}-%{version}.tgz
 Source1: %{pecl_name}.ini
-URL: http://pecl.php.net/package/%{pecl_name}
+URL: https://pecl.php.net/package/%{pecl_name}
 
 BuildRequires: pecl >= 1.10.0
 BuildRequires: %{php}-devel
@@ -64,7 +65,7 @@ mv %{pecl_name}-%{version} NTS
 
 sed -e '/LICENSE/s/role="doc"/role="src"/' -i package.xml
 
-%if %{with_zts}
+%if %{with zts}
 cp -pr NTS ZTS
 %endif
 
@@ -72,15 +73,15 @@ cp -pr NTS ZTS
 %build
 pushd NTS
 phpize
-%configure --with-%{pecl_name} --with-php-config=%{_bindir}/php-config
-make %{?_smp_mflags}
+%configure --with-imagick=%{prefix} --with-php-config=%{_bindir}/php-config
+%make_build
 popd
 
-%if %{with_zts}
+%if %{with zts}
 pushd ZTS
 zts-phpize
-%configure --with-%{pecl_name} --with-php-config=%{_bindir}/zts-php-config
-make %{?_smp_mflags}
+%configure --with-imagick=%{prefix} --with-php-config=%{_bindir}/zts-php-config
+%make_build
 popd
 %endif
 
@@ -90,9 +91,9 @@ install -D -p -m 644 package.xml %{buildroot}%{pecl_xmldir}/%{pecl_name}.xml
 
 make install -C NTS INSTALL_ROOT=%{buildroot}
 install -D -p -m 644 %{SOURCE1} %{buildroot}%{php_inidir}/%{ini_name}
-%if %{with_zts}
+%if %{with zts}
 make install -C ZTS INSTALL_ROOT=%{buildroot}
-install -Dpm 0644 %{SOURCE1} %{buildroot}%{php_ztsinidir}/%{ini_name}
+install -D -p -m 644 %{SOURCE1} %{buildroot}%{php_ztsinidir}/%{ini_name}
 %endif
 
 for i in $(grep 'role="doc"' package.xml | sed -e 's/^.*name="//;s/".*$//')
@@ -100,7 +101,7 @@ do install -D -p -m 644 NTS/$i %{buildroot}%{pecl_docdir}/%{pecl_name}/$i
 done
 
 rm -rf %{buildroot}%{php_incldir}/ext/%{pecl_name}/
-%if %{with_zts}
+%if %{with zts}
 rm -rf %{buildroot}%{php_ztsincldir}/ext/%{pecl_name}/
 %endif
 
@@ -111,7 +112,7 @@ rm -rf %{buildroot}%{php_ztsincldir}/ext/%{pecl_name}/
     --no-php-ini \
     --define extension=%{buildroot}%{php_extdir}/%{pecl_name}.so \
     --modules | grep %{pecl_name}
-%if %{with_zts}
+%if %{with zts}
 %{__ztsphp} \
     --no-php-ini \
     --define extension=%{buildroot}%{php_ztsextdir}/%{pecl_name}.so \
@@ -135,7 +136,7 @@ fi
 %{pecl_xmldir}/%{pecl_name}.xml
 %{php_extdir}/%{pecl_name}.so
 %config(noreplace) %verify(not md5 mtime size) %{php_inidir}/%{ini_name}
-%if %{with_zts}
+%if %{with zts}
 %{php_ztsextdir}/%{pecl_name}.so
 %config(noreplace) %verify(not md5 mtime size) %{php_ztsinidir}/%{ini_name}
 %endif
